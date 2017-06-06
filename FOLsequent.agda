@@ -1,29 +1,19 @@
 module FOLsequent where
 
-open import Data.String using (String)
-
 open import Data.Empty
-
 open import Data.Nat
-
-
-open import Data.Product
+open import Data.Nat.Properties
+open import Data.String using (String)
+open import Data.Sum
 open import Relation.Binary.PropositionalEquality as PropEq
   using (_≡_; _≢_; refl; sym; cong; subst)
 open import Relation.Nullary
-
-
-open import Data.String using (String; _++_)
-
--- open import Data.Fin
--- open import Data.Fin.Subset
-open import Data.List.Base as List using (List; []; _∷_; [_])
--- open import Data.Bool using () renaming (_∨_ to _∨B_)
+open import Data.List.Base as List using (List; []; _∷_; [_]; _++_)
 open import Data.List.Any as LAny
 open LAny.Membership-≡
 
 data Term : Set where
-  $_ : ℕ → Term
+  $ : ℕ → Term
   Fun : String → List Term → Term
 
 Const : String -> Term
@@ -51,20 +41,20 @@ mutual
 
   FVlst : List Term -> List ℕ
   FVlst [] = []
-  FVlst (x ∷ xs) = (FVt x) List.++ (FVlst xs)
+  FVlst (x ∷ xs) = (FVt x) ++ (FVlst xs)
 
   FVf : Formula → List ℕ
   FVf (_ ⟨ lst ⟩) = FVlst lst
-  FVf (f ∧ f₁) = FVf f List.++ FVf f₁
-  FVf (f ∨ f₁) = FVf f List.++ FVf f₁
-  FVf (f ⟶ f₁) = FVf f List.++ FVf f₁
+  FVf (f ∧ f₁) = FVf f ++ FVf f₁
+  FVf (f ∨ f₁) = FVf f ++ FVf f₁
+  FVf (f ⟶ f₁) = FVf f ++ FVf f₁
   FVf (~ f) = FVf f
   FVf (All x) = FVf (x (Const ""))
   FVf (Ex x) = FVf (x (Const ""))
 
 FV : Structure → List ℕ
 FV ∣ f ∣ = FVf f
-FV (s ,, t) = FV s List.++ FV t
+FV (s ,, t) = FV s ++ FV t
 FV Ø = []
 
 _#_ : ℕ -> List ℕ -> Set
@@ -74,13 +64,10 @@ x # xs = x ∉ xs
 ∪ [] = 0
 ∪ (x ∷ xs) = x ⊔ (∪ xs)
 
-∃fresh : List ℕ -> ℕ
-∃fresh xs = suc (∪ xs)
+∃# : List ℕ -> ℕ
+∃# xs = suc (∪ xs)
 
 
-open import Data.Sum
-open import Data.Nat.Properties
--- _∨_ = _⊎_
 ------------------------------------------------------------------------------------
 
 ℕ-meet-dist : ∀ {x y z : ℕ} -> (x ≤ y) ⊎ (x ≤ z) -> x ≤ y ⊔ z
@@ -108,22 +95,22 @@ open import Data.Nat.Properties
 ∈-cons {y ∷ L} {x} (there x∈L) ¬x≡y = x∈L
 ------------------------------------------------------------------------------------
 
-∃fresh-impl-spec' : ∀ x L -> x ∈ L -> x ≤ ∪ L
-∃fresh-impl-spec' x [] ()
-∃fresh-impl-spec' x (y ∷ L) x∈y∷L with x ≟ y
-∃fresh-impl-spec' x (.x ∷ L) x∈y∷L | yes refl = ℕ-meet-dist {x} {x} (inj₁ ≤-refl)
-∃fresh-impl-spec' x (y ∷ L) x∈y∷L | no ¬x≡y =
-  ℕ-meet-dist {x} {y} (inj₂ (∃fresh-impl-spec' x L (∈-cons x∈y∷L ¬x≡y)))
+∃#-lemma' : ∀ x L -> x ∈ L -> x ≤ ∪ L
+∃#-lemma' x [] ()
+∃#-lemma' x (y ∷ L) x∈y∷L with x ≟ y
+∃#-lemma' x (.x ∷ L) x∈y∷L | yes refl = ℕ-meet-dist {x} {x} (inj₁ ≤-refl)
+∃#-lemma' x (y ∷ L) x∈y∷L | no ¬x≡y =
+  ℕ-meet-dist {x} {y} (inj₂ (∃#-lemma' x L (∈-cons x∈y∷L ¬x≡y)))
 ------------------------------------------------------------------------------------
 
-∃fresh-impl-spec'' : ∀ x L -> x ∈ L -> ¬ (x ≡ ∃fresh L)
-∃fresh-impl-spec'' .(suc (∪ L)) L x∈L refl =
-  1+n≰n {∪ L} (∃fresh-impl-spec' (suc (∪ L)) L x∈L)
+∃#-lemma'' : ∀ x L -> x ∈ L -> ¬ (x ≡ ∃# L)
+∃#-lemma'' .(suc (∪ L)) L x∈L refl =
+  1+n≰n {∪ L} (∃#-lemma' (suc (∪ L)) L x∈L)
 ------------------------------------------------------------------------------------
 
-∃fresh-lemma : ∀ L -> ∃fresh L ∉ L
-∃fresh-lemma L ∃freshL∈L =
-  ∃fresh-impl-spec'' (∃fresh L) L ∃freshL∈L refl
+∃#-lemma : ∀ L -> ∃# L ∉ L
+∃#-lemma L ∃#L∈L =
+  ∃#-lemma'' (∃# L) L ∃#L∈L refl
 
 
 
@@ -131,8 +118,8 @@ data _⊢_ : Structure → Structure → Set where
   I : ∀ {A} → ∣ A ∣ ⊢ ∣ A ∣
   Cut : ∀ A {Γ Σ Δ Π} →
     Γ ⊢ (Δ ,, ∣ A ∣) → (∣ A ∣ ,, Σ) ⊢ Π →
-    -----------------------------
-         (Γ ,, Σ) ⊢ (Δ ,, Π)
+    ------------------------------------
+            (Γ ,, Σ) ⊢ (Δ ,, Π)
   ∧L₁ : ∀ {Γ Δ A B} → (Γ ,, ∣ A ∣) ⊢ Δ → (Γ ,, ∣ A ∧ B ∣) ⊢ Δ
   ∧L₂ : ∀ {Γ Δ A B} → (Γ ,, ∣ B ∣) ⊢ Δ → (Γ ,, ∣ A ∧ B ∣) ⊢ Δ
   ∧R : ∀ {Γ Σ Δ Π A B} →
@@ -147,7 +134,7 @@ data _⊢_ : Structure → Structure → Set where
     ((Γ ,, Σ) ,, ∣ A ∨ B ∣) ⊢ (Δ ,, Π)
   ⟶L : ∀ {Γ Σ Δ Π A B} →
     Γ ⊢ (∣ A ∣ ,, Δ) → (Σ ,, ∣ B ∣) ⊢ Π →
-    -----------------------------------
+    ------------------------------------
     ((Γ ,, Σ) ,, ∣ A ⟶ B ∣) ⊢ (Δ ,, Π)
   ⟶R : ∀ {Γ Δ A B} → (Γ ,, ∣ A ∣) ⊢ (∣ B ∣ ,, Δ) → Γ ⊢ (∣ A ⟶ B ∣ ,, Δ)
   ~L : ∀ {Γ Δ A} → Γ ⊢ (∣ A ∣ ,, Δ) → (Γ ,, ∣ ~ A ∣) ⊢ Δ
@@ -197,8 +184,20 @@ data _⊢_ : Structure → Structure → Set where
   ØR₂ : ∀ {Γ Δ} → Γ ⊢ (Δ ,, Ø) → Γ ⊢ Δ
 
 
-simple : ∀ {P} -> ∣ All (λ x -> P ⟨ [ x ] ⟩) ∣ ⊢ ∣ All (λ y -> P ⟨ [ y ] ⟩) ∣
-simple {P} = ØR₂ (AllR {y = y} (ØL₂ (AllL {t = $ y} (ØL₁ (ØR₁ I)))) y-fresh)
+AllR# : ∀ {Γ Δ A} → Γ ⊢ (∣ A ($ (∃# (FV (Γ ,, Δ)))) ∣ ,, Δ) → Γ ⊢ (∣ All A ∣ ,, Δ)
+AllR# {Γ} {Δ} Γ⊢[y/x]A,Δ = AllR Γ⊢[y/x]A,Δ (∃#-lemma (FV (Γ ,, Δ)))
+
+
+ExL# : ∀ {Γ Δ A} → (Γ ,, ∣ A ($ (∃# (FV (Γ ,, Δ)))) ∣) ⊢ Δ → (Γ ,, ∣ Ex A ∣) ⊢ Δ
+ExL# {Γ} {Δ} Γ,[y/x]A⊢Δ = ExL Γ,[y/x]A⊢Δ (∃#-lemma (FV (Γ ,, Δ)))
+
+
+lemma₁ : ∀ {P} → ∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ⊢ ∣ All (λ y → P ⟨ [ y ] ⟩) ∣
+lemma₁ {P} = ØR₂ (AllR {y = y} (ØL₂ (AllL {t = $ y} (ØL₁ (ØR₁ I)))) y-fresh)
   where
-    y = ∃fresh (FV (∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ,, Ø))
-    y-fresh = ∃fresh-lemma (FV (∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ,, Ø))
+    y = ∃# (FV (∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ,, Ø))
+    y-fresh = ∃#-lemma (FV (∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ,, Ø))
+
+lemma₂ : ∀ {P} →
+  ∣ Ex (λ y → All (λ x → P ⟨ x ∷ [ y ] ⟩)) ∣ ⊢ ∣ All (λ x → Ex (λ y → P ⟨ x ∷ [ y ] ⟩)) ∣
+lemma₂ {P} = ØR₂ (AllR# (ØL₂ (ExL# (ExR (AllL (ØL₁ (ØR₁ I)))))))
