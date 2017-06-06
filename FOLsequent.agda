@@ -198,8 +198,7 @@ data _⊢_ : Structure → Structure → Set where
 
 
 simple : ∀ {P} -> ∣ All (λ x -> P ⟨ [ x ] ⟩) ∣ ⊢ ∣ All (λ y -> P ⟨ [ y ] ⟩) ∣
-simple {P} = let y = ∃fresh (FV (∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ,, Ø)) in
-  ØR₂ (AllR {y = y} (ØL₂ (AllL {t = $ y} (ØL₁ (ØR₁ I)))) y-fresh)
+simple {P} = ØR₂ (AllR {y = y} (ØL₂ (AllL {t = $ y} (ØL₁ (ØR₁ I)))) y-fresh)
   where
     y = ∃fresh (FV (∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ,, Ø))
     y-fresh = ∃fresh-lemma (FV (∣ All (λ x → P ⟨ [ x ] ⟩) ∣ ,, Ø))
