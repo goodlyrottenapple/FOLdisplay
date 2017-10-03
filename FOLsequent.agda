@@ -162,11 +162,11 @@ data _⊢_ : Structure → Structure → Set where
     Γ ⊢ (Δ₁ ++ [ B ] ++ [ A ] ++ Δ₂)
 
 
-PL2 : ∀ {A B Δ} -> (A ∷ [ B ]) ⊢ Δ → (B ∷ [ A ]) ⊢ Δ
-PL2 {A} {B} A,B⊢Δ = PL {[]} {[]} {_} {A} {B} A,B⊢Δ
+PL' : ∀ {A B Δ} -> (A ∷ [ B ]) ⊢ Δ → (B ∷ [ A ]) ⊢ Δ
+PL' {A} {B} A,B⊢Δ = PL {[]} {[]} {_} {A} {B} A,B⊢Δ
 
-PR2 : ∀ {A B Γ} -> Γ ⊢ (A ∷ [ B ]) → Γ ⊢ (B ∷ [ A ])
-PR2 {A} {B} Γ⊢A,B = PR {_} {[]} {[]} {A} {B} Γ⊢A,B
+PR' : ∀ {A B Γ} -> Γ ⊢ (A ∷ [ B ]) → Γ ⊢ (B ∷ [ A ])
+PR' {A} {B} Γ⊢A,B = PR {_} {[]} {[]} {A} {B} Γ⊢A,B
 
 
 _>>_ : ∀ {A B : Set} -> (A → B) -> A -> B
@@ -180,24 +180,28 @@ infixr 4 _>>_
 infixr 4 _>>₂_
 
 lemma : ∀ {A B C} -> [] ⊢ [ (A ⟶ (B ∨ C)) ⟶ (((B ⟶ (~ A)) ∧ (~ C)) ⟶ (~ A)) ]
-lemma {A} {B} {C} = ⟶R >> ⟶R >> PL2 >> CR >> ⟶L {[]} {[ (B ⟶ (~ A)) ∧ (~ C) ]} {[ ~ A ]} {[ ~ A ]} >>₂
-  (PR2 >> ~R >> I) ,
-  PL2 >> CL {[ B ∨ C ]} {A = (B ⟶ (~ A)) ∧ (~ C)} >> ∧L₂ {(B ∨ C) ∷ [ (B ⟶ (~ A)) ∧ (~ C) ]}
+lemma {A} {B} {C} = ⟶R >> ⟶R >> PL' >> CR >> ⟶L {[]} {[ (B ⟶ (~ A)) ∧ (~ C) ]} {[ ~ A ]} {[ ~ A ]} >>₂
+  (PR' >> ~R >> I) ,
+  PL' >> CL {[ B ∨ C ]} {A = (B ⟶ (~ A)) ∧ (~ C)} >> ∧L₂ {(B ∨ C) ∷ [ (B ⟶ (~ A)) ∧ (~ C) ]}
     >> PL {[ B ∨ C ]} {[]} >> ∧L₁ {(B ∨ C) ∷ [ ~ C ]} >> ⟶L {(B ∨ C) ∷ [ ~ C ]} {[]} {[]} >>₂
-      (~L {[ B ∨ C ]} >> PR2 >> ∨L {[]} {[]} {[ B ]} >>₂ I , I) ,
+      (~L {[ B ∨ C ]} >> PR' >> ∨L {[]} {[]} {[ B ]} >>₂ I , I) ,
       I
 
-lemma₁ : ∀ {P} → [ All (λ x → P ⟨ [ x ] ⟩) ] ⊢ [ All (λ y → P ⟨ [ y ] ⟩) ]
-lemma₁ {P} = AllR {y = y} (AllL {[]} {t = $ y} I) y-fresh
-  where
-    y = ∃# (FV [ All (λ x → P ⟨ [ x ] ⟩) ])
-    y-fresh = ∃#-lemma (FV [ All (λ x → P ⟨ [ x ] ⟩) ])
+
+
+-- AllR {y = y} (AllL {[]} {t = $ y} I) y-fresh
+--   where
+--     y = ∃# (FV [ All (λ x → P ⟨ [ x ] ⟩) ])
+--     y-fresh = ∃#-lemma (FV [ All (λ x → P ⟨ [ x ] ⟩) ])
 
 AllR# : ∀ {Γ Δ A} → Γ ⊢ ([ A ($ (∃# (FV (Γ ++ Δ)))) ] ++ Δ) → Γ ⊢ ([ All A ] ++ Δ)
 AllR# {Γ} {Δ} Γ⊢[y/x]A,Δ = AllR Γ⊢[y/x]A,Δ (∃#-lemma (FV (Γ ++ Δ)))
 
 ExL# : ∀ {Γ Δ A} → (Γ ++ [ A ($ (∃# (FV (Γ ++ Δ)))) ]) ⊢ Δ → (Γ ++ [ Ex A ]) ⊢ Δ
 ExL# {Γ} {Δ} Γ,[y/x]A⊢Δ = ExL {Γ} Γ,[y/x]A⊢Δ (∃#-lemma (FV (Γ ++ Δ)))
+
+lemma₁ : ∀ {P} → [ All (λ x → P ⟨ [ x ] ⟩) ] ⊢ [ All (λ y → P ⟨ [ y ] ⟩) ]
+lemma₁ {P} = AllR# (AllL {[]} I)
 
 
 lemma₂ : ∀ {P} →

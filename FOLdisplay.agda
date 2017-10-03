@@ -5,6 +5,8 @@ open import Data.String using (String)
 open import Data.Empty
 
 open import Data.Nat
+
+
 open import Data.Product
 open import Relation.Binary.PropositionalEquality as PropEq
   using (_≡_; _≢_; refl; sym; cong; subst)
@@ -45,8 +47,15 @@ union (x ∷ xs) ys = insert x (union xs ys)
 remove : ℕ → List ℕ → List ℕ
 remove n [] = []
 remove n (x ∷ xs) with n Data.Nat.≟ x
-remove n (x ∷ xs) | yes p = xs
-remove n (x ∷ xs) | no ¬p = x ∷ remove n xs
+remove n (.n ∷ xs) | yes refl = xs
+remove n (x ∷ xs) | no _ = x ∷ remove n xs
+
+
+remove-rewrite : ∀ x {xs} -> remove x (x ∷ xs) ≡ xs
+remove-rewrite x with x ≟ x
+remove-rewrite x | yes refl = refl
+remove-rewrite x | no x≠x = ⊥-elim (x≠x refl)
+
 
 
 -- xs \\ ys
@@ -54,13 +63,29 @@ diff : List ℕ → List ℕ → List ℕ
 diff xs [] = xs
 diff xs (x ∷ ys) = diff (remove x xs) ys
 
-mutual
-  data Term : Set where
-    Var : ℕ → Term
-    Const : Name → Term
-    Fun : Name → List Term → Term
-    -- [[_/_]]_ : Term → ℕ → Term → Term
-    [[[_]]]_ : List (Term × ℕ) → Term → Term
+--
+-- mutual
+--   data TermT : List ℕ -> Set where
+--     VarT : (n : ℕ) → TermT [ n ]
+--     ConstT : Name → TermT []
+--     FunT : ∀ {xs} -> Name → (TermList xs) → TermT xs
+--   -- [[[_]]]T_ : List (Term × ℕ) → Term → Term
+--   data TermList : List ℕ -> Set where
+--     []T : TermList []
+--     _∷T_ : ∀ {xs ys} (t : TermT xs) (ts : TermT ys) -> TermList (union xs ys)
+--
+--   data SubstList : List ℕ -> Set where
+--     []S : SubstList []
+--     _/_∷S_ : ∀ {xs ys} (t : TermT xs) (x : ℕ) (ts : TermT ys) -> SubstList (union xs (remove x ys))
+
+
+
+data Term : Set where
+  Var : ℕ → Term
+  Const : Name → Term
+  Fun : Name → List Term → Term
+  -- [[_/_]]_ : Term → ℕ → Term → Term
+  [[[_]]]_ : List (Term × ℕ) → Term → Term
 
 mutual
   data _⊢≡_ : Term → Term → Set where
@@ -92,12 +117,12 @@ mutual
 
 
 
-open import Data.Maybe using (Maybe; just; nothing; monad)
-
-open import Category.Monad using (RawMonad)
-open import Agda.Primitive as P
-
-open RawMonad (monad {P.lzero}) using (_>>=_;return)
+-- open import Data.Maybe using (Maybe; just; nothing; monad)
+--
+-- open import Category.Monad using (RawMonad)
+-- open import Agda.Primitive as P
+--
+-- open RawMonad (monad {P.lzero}) using (_>>=_;return)
 -- open Category.Monad.rawMonad
 open import Data.String using () renaming (_≟_ to _≟S_)
 
@@ -107,6 +132,82 @@ data Term' : Set where
   Const' : Name → Term'
   Fun' : Name → List Term' → Term'
 
+mutual
+  data TTerm : List ℕ -> Set where
+    TVar : (n : ℕ) → TTerm [ n ]
+    TConst : Name → TTerm []
+    TFun : ∀ {xs} -> Name → TTermList xs → TTerm xs
+
+  data TTermList : List ℕ -> Set where
+    []T : TTermList []
+    _∷T_ : ∀ {xs ys} (t : TTerm xs) (ts : TTermList ys) -> TTermList (union xs ys)
+
+
+open import Relation.Nullary.Decidable
+open import Relation.Binary.Core
+
+open import Data.List.Any as LAny
+open LAny.Membership-≡
+
+∈-∷-elim : ∀ {A : Set} {x : A} (y : A) xs -> ¬(x ≡ y) -> y ∈ x ∷ xs -> y ∈ xs
+∈-∷-elim x [] x≠y (here refl) = ⊥-elim (x≠y refl)
+∈-∷-elim y [] _ (there ())
+∈-∷-elim x (x₁ ∷ xs) x≠y (here refl) = ⊥-elim (x≠y refl)
+∈-∷-elim y (x₁ ∷ xs) _ (there y∈x∷xs) = y∈x∷xs
+
+
+_∈ℕ?_ : Decidable {A = ℕ} (_∈_)
+x ∈ℕ? [] = no (λ ())
+x ∈ℕ? (x' ∷ xs) with x ≟ x'
+x ∈ℕ? (.x ∷ xs) | yes refl = yes (here refl)
+x ∈ℕ? (x' ∷ xs) | no x≠x' with x ∈ℕ? xs
+x ∈ℕ? (x' ∷ xs) | no x≠x' | yes x∈xs = yes (there x∈xs)
+x ∈ℕ? (x' ∷ xs) | no x≠x' | no x∉xs = no (λ x∈x'∷xs → x∉xs (∈-∷-elim x xs (λ x'≡x → x≠x' (sym x'≡x)) x∈x'∷xs))
+
+
+
+
+-- subTaux : List ℕ -> ℕ -> List ℕ -> List ℕ
+-- subTaux xs x ys with x ∈ℕ? ys
+-- subTaux xs x ys | yes _ = union xs (remove x ys)
+-- subTaux xs x ys | no _ = ys
+
+-- mutual
+--   subT : ∀ {ts ys} → TTerm ts → (x : ℕ) -> TTerm ys → TTerm (subTaux ts x ys)
+--   subT t x (TVar x') with x ≟ x'
+--   subT t .x' (TVar x') | yes refl rewrite remove-rewrite x' {[]} = {! t'  !}
+--   ... | no _ = (TVar x')
+--   subT _ _ (TConst n) = TConst n
+--   subT t x (TFun n args) = TFun n (subTList t x args)
+--
+--   subTList : ∀ {ts ys} → TTerm ts → (x : ℕ) -> TTermList ys → TTermList (subTaux ts x ys)
+--   subTList _ _ []T = []T
+--   subTList {ts} t x (_∷T_ {xs} {ys} a args) = rec
+--     where
+--       a' : TTerm (subTaux ts x xs)
+--       a' = subT t x a
+--
+--       args' : TTermList (subTaux ts x ys)
+--       args' = subTList t x args
+--
+--       ≡-subTaux : ∀ x xs ys -> subTaux ts x (union xs ys) ≡ union (subTaux ts x xs) (subTaux ts x ys)
+--       ≡-subTaux _ [] _ = refl
+--       ≡-subTaux x (x' ∷ xs) ys = {!   !}
+--
+--       rec : TTermList (subTaux ts x (union xs ys))
+--       rec rewrite ≡-subTaux x xs ys = a' ∷T args'
+--
+--     --subT x t' t ∷T subTList x t' l
+--
+
+TTerm→Term : ∀ {xs} -> TTerm xs -> Term
+TTerm→Term (TVar n) = Var n
+TTerm→Term (TConst c) = Const c
+TTerm→Term (TFun n args) = Fun n (TTermList→ListTerm args)
+  where
+    TTermList→ListTerm : ∀ {xs} -> TTermList xs -> List Term
+    TTermList→ListTerm []T = []
+    TTermList→ListTerm (_∷T_ {_} {ys} t ts) = (TTerm→Term t) ∷ (TTermList→ListTerm {ys} ts)
 
 mutual
   sub : ℕ → Term' → Term' → Term'
@@ -318,19 +419,19 @@ mutual
       mon refl = refl
 
 
-data _∈_ : ℕ → List ℕ → Set where
-  here : ∀ {x xs} → x ∈ (x ∷ xs)
-  there : ∀ {x y xs} → x ∈ xs → x ∈ (y ∷ xs)
-
-data _⊆_ : List ℕ → List ℕ → Set where
-  nil : ∀ {xs} → [] ⊆ xs
-  cons : ∀ {x xs ys} → x ∈ ys → xs ⊆ ys → (x ∷ xs) ⊆ ys
-
-_∉_ : ℕ → List ℕ → Set
-n ∉ ns = ¬ (n ∈ ns)
-
-_⊈_ : List ℕ → List ℕ → Set
-xs ⊈ ys = ¬ (xs ⊆ ys)
+-- data _∈_ : ℕ → List ℕ → Set where
+--   here : ∀ {x xs} → x ∈ (x ∷ xs)
+--   there : ∀ {x y xs} → x ∈ xs → x ∈ (y ∷ xs)
+--
+-- data _⊆_ : List ℕ → List ℕ → Set where
+--   nil : ∀ {xs} → [] ⊆ xs
+--   cons : ∀ {x xs ys} → x ∈ ys → xs ⊆ ys → (x ∷ xs) ⊆ ys
+--
+-- _∉_ : ℕ → List ℕ → Set
+-- n ∉ ns = ¬ (n ∈ ns)
+--
+-- _⊈_ : List ℕ → List ℕ → Set
+-- xs ⊈ ys = ¬ (xs ⊆ ys)
 
 
 mutual
@@ -343,8 +444,11 @@ mutual
   FVs [] = []
   FVs (t ∷ ts) = union (FV t) (FVs ts)
 
+
+
+
 data Formula : List ℕ → Set where
-  _⟨_⟩ : Name → (ts : List Term) → Formula (FVs (List.map Term→Term' ts))
+  _⟨_⟩ : Name → ∀ {xs} (ts : TTermList xs) → Formula xs
   _∧_ : ∀ {ns} → Formula ns → Formula ns → Formula ns
   _∨_ : ∀ {ns} → Formula ns → Formula ns → Formula ns
   _⟶_ : ∀ {ns} → Formula ns → Formula ns → Formula ns
@@ -357,16 +461,17 @@ data Formula : List ℕ → Set where
 
 data Structure : List ℕ → Set where
   ∣_∣ : ∀ {n} → Formula n → Structure n
-  _,_ : ∀ {n} → Structure n → Structure n → Structure n
-  _>>_ : ∀ {n} → Structure n → Structure n → Structure n
-  ○ : ∀ {n} v → Structure n → Structure (insert v n)
+  _,_ : ∀ {n m} → Structure n → Structure m → {n≡m : n ≡ m} -> Structure n
+  _>>_ : ∀ {n m} → Structure n → Structure m → {n≡m : n ≡ m} → Structure n
+  _<<_ : ∀ {n m} → Structure n → Structure m → {n≡m : n ≡ m} → Structure n
+  I : ∀ {n} → Structure n
+  ○ : ∀ {n} v → Structure n → {v∉ : v ∉ n} → Structure (insert v n)
   Q : ∀ {n} v → Structure n → Structure (remove v n)
 
 
 data _⊢_ : ∀ {n} → Structure n → Structure n → Set where
-  -- atom : ∀ {n} {ns} {xs : TList ns} →
-  --   --------------------------
-  --   ∣ n ⟨ xs ⟩ ∣ ⊢ ∣ n ⟨ xs ⟩ ∣
+  atom : ∀ {n xs} {ts us : TTermList xs} →
+    ∣ n ⟨ ts ⟩ ∣ ⊢ ∣ n ⟨ us ⟩ ∣
   allR : ∀ {x n X Y} →
     Y ⊢ Q {n} x ∣ X ∣ →
     -------------------
@@ -375,6 +480,228 @@ data _⊢_ : ∀ {n} → Structure n → Structure n → Set where
             ∣ Y ∣ ⊢ ∣ X ∣ →
     -------------------------------
     ∣ All {n} x Y ∣ ⊢ Q {n} x ∣ X ∣
+
+open import Data.Unit as Unit using (⊤)
+open import Data.Nat.Properties as Propℕ
+
+_≤'?_ : Decidable _≤′_
+x ≤'? y with x ≤? y
+x ≤'? y | yes p = yes (≤⇒≤′ p)
+x ≤'? y | no ¬p = no (λ x₁ → ¬p (≤′⇒≤ x₁))
+
+-- mutual
+--   data OList : Set where
+--     []O : OList
+--     _∷O_ : (x : ℕ) -> (xs : OList) -> {x< : isLess x xs} -> OList
+--
+--   isLess : ℕ -> OList -> Set
+--   isLess x []O = ⊤
+--   isLess x (y ∷O ol) with x ≤'? y
+--   isLess x (.x ∷O ol) | yes ≤′-refl = ⊥
+--   isLess x (.(suc _) ∷O ol) | yes (≤′-step _) = ⊤
+--   isLess x (y ∷O ol) | no _ = ⊥
+--
+--
+--
+-- mutual
+--   data IsLess : ℕ -> OList -> Set where
+--     nil : ∀ {x} -> IsLess x []O
+--     cons : ∀ {x x' xs} -> x < x' -> (x'<xs : IsLess x' xs) -> IsLess x ((x' ∷O xs) {IsLess→isLess x'<xs})
+--
+--   IsLess→isLess : ∀ {x xs} -> IsLess x xs -> isLess x xs
+--   IsLess→isLess nil = ⊤.tt
+--   IsLess→isLess {x} (cons {x' = x'} x<x' x<xs) with x ≤'? x'
+--   IsLess→isLess {x} (cons {_} {.x} x<x' x<xs) | yes ≤′-refl = contr x<x'
+--     where
+--       contr : ∀ {x} -> suc x ≤ x -> ⊥
+--       contr {zero} ()
+--       contr {suc x} (s≤s sx≤x) = contr sx≤x
+--   IsLess→isLess {x} (cons {_} {.(suc _)} x<x' x<xs) | yes (≤′-step p) = ⊤.tt
+--   IsLess→isLess {x} (cons {_} {x'} x<x' x<xs) | no ¬x≤′x' = ¬x≤′x' (≤⇒≤′ (sucx≤y→x≤y x<x'))
+--     where
+--       sucx≤y→x≤y : ∀ {x y} -> suc x ≤ y -> x ≤ y
+--       sucx≤y→x≤y {zero} sx≤y = z≤n
+--       sucx≤y→x≤y {suc x} (s≤s sx≤y) = s≤s (sucx≤y→x≤y sx≤y)
+--
+-- open import Data.Sum
+--
+--
+-- isLess→IsLess : ∀ {x xs} -> isLess x xs -> IsLess x xs
+-- isLess→IsLess {x} {[]O} ⊤.tt = nil
+-- isLess→IsLess {x} {x' ∷O xs} x< with x ≤'? x'
+-- isLess→IsLess {.x'} {x' ∷O xs} () | yes ≤′-refl
+-- isLess→IsLess {x} {(.(suc _) ∷O xs) {sn<}} ⊤.tt | yes (≤′-step {n = n} x≤′n) = {!sn<   !}
+--   where
+--     aux : x < suc n
+--     aux = {! sn<  !}
+--
+--     rec : IsLess (suc n) xs
+--     rec = isLess→IsLess sn<
+--   --
+--     aux₂ : IsLess x ((suc n ∷O xs) {sn<})
+--     aux₂ = cons aux rec
+--
+-- isLess→IsLess {x} {x' ∷O xs} x< | no ¬p = {!   !}
+
+
+mutual
+  data OList : Set where
+    []O : OList
+    _∷O_ : (x : ℕ) -> (xs : OList) -> {x< : IsLess x xs} -> OList
+
+  data IsLess : ℕ -> OList -> Set where
+    base : ∀ {x} -> IsLess x []O
+    step : ∀ {x x' xs} -> x < x' -> (x'<xs : IsLess x' xs) -> IsLess x ((x' ∷O xs) {x'<xs})
+
+
+
+
+
+IsLess→< : ∀ {x x' xs x'<} -> IsLess x ((x' ∷O xs) {x'<}) -> x < x'
+IsLess→< (step x<x' _) = x<x'
+
+mutual
+  insertO : ℕ -> OList -> OList
+  insertO x []O = (x ∷O []O) {base}
+  insertO x (x' ∷O xs) with x ≤'? x'
+  insertO x ((.x ∷O xs) {x<}) | yes ≤′-refl = (x ∷O xs) {x<}
+  insertO x ((.(suc _) ∷O xs) {x<}) | yes (≤′-step {n = x'} p) = (x ∷O (((suc x') ∷O xs) {x<})) {step (s≤s (≤′⇒≤ p)) x<}
+  insertO x ((x' ∷O xs) {x'<}) | no x'<x = (x' ∷O insertO x xs) {insertO-lemma xs x'< x'<x}
+
+  insertO-lemma : ∀ {x x'} xs -> IsLess x' xs -> ¬ x ≤′ x' -> IsLess x' (insertO x xs)
+  insertO-lemma []O base ¬x≤′x' = step (≰⇒> (λ x≤x' → ¬x≤′x' (≤⇒≤′ x≤x'))) base
+  insertO-lemma {x} {x'} (x'' ∷O xs) x'<xs x'<x with x ≤'? x''
+  insertO-lemma {.x''} {x'} ((x'' ∷O xs) {x''<}) x'<xs _ | yes ≤′-refl = step (IsLess→< x'<xs) x''<
+  insertO-lemma {x} {x'} ((.(suc _) ∷O xs) {sn<xs}) x'<xs ¬x≤′x' | yes (≤′-step x≤′n) =
+    step (≰⇒> (λ x≤x' → ¬x≤′x' (≤⇒≤′ x≤x'))) (step (s≤s (≤′⇒≤ x≤′n)) sn<xs)
+  insertO-lemma {x} {x'} ((x'' ∷O xs) {x''<xs}) x'<xs _ | no x''<x = step (IsLess→< x'<xs) (insertO-lemma {x} {x''} xs x''<xs x''<x)
+
+data _∈O_ : ℕ -> OList -> Set where
+  here : ∀ {x xs x<xs} -> x ∈O ((x ∷O xs) {x<xs})
+  there : ∀ {x y xs y<xs} -> x ∈O xs -> x ∈O ((y ∷O xs) {y<xs})
+
+_∉O_ : ℕ -> OList -> Set
+x ∉O xs = ¬ (x ∈O xs)
+
+
+IsLess-remove : ∀ {x x'} xs {x'<xs} -> IsLess x ((x' ∷O xs) {x'<xs}) -> IsLess x xs
+IsLess-remove []O x<x∷xs = base
+IsLess-remove ((x'' ∷O xs) {x''<xs}) (step x<x' x'<x''∷xs) = step (<-trans x<x' (IsLess→< x'<x''∷xs)) x''<xs
+
+mutual
+  removeO : ℕ -> OList -> OList
+  removeO x []O = []O
+  removeO x (x' ∷O xs) with x ≟ x'
+  removeO x (.x ∷O xs) | yes refl = xs
+  removeO x ((x' ∷O xs) {x'<xs}) | no ¬p = (x' ∷O removeO x xs) {removeO-lemma {x} {x'} xs x'<xs}
+
+  removeO-lemma : ∀ {x x'} xs -> IsLess x' xs -> IsLess x' (removeO x xs)
+  removeO-lemma []O x'<xs = base
+  removeO-lemma {x} {x'} (x'' ∷O xs) x'<xs with x ≟ x''
+  removeO-lemma {.x''} {x'} (x'' ∷O xs) x<xs | yes refl = IsLess-remove xs x<xs
+  removeO-lemma {x} {x'} ((x'' ∷O xs) {x''<xs}) x'<xs | no ¬p = step (IsLess→< x'<xs) (removeO-lemma {x} {x''} xs x''<xs)
+
+
+
+-- isLess : ℕ -> OList -> Set
+-- isLess x []O = ⊤
+-- isLess x (y ∷O ol) with x ≤'? y
+-- isLess x (.x ∷O ol) | yes ≤′-refl = ⊥
+-- isLess x (.(suc _) ∷O ol) | yes (≤′-step _) = ⊤
+-- isLess x (y ∷O ol) | no _ = ⊥
+--
+
+
+-- smart constructor for OList
+_∷O'_ : (x : ℕ) -> (xs : OList) -> OList
+x ∷O' xs = insertO x xs
+
+testOList : OList
+testOList = 2 ∷O' (1 ∷O' (2 ∷O' []O))
+
+
+
+data Formula' : OList → Set where
+  -- _⟨_⟩ : Name → ∀ {xs} (ts : TTermList xs) → Formula xs
+  _∧_ : ∀ {ns} → Formula' ns → Formula' ns → Formula' ns
+  _∨_ : ∀ {ns} → Formula' ns → Formula' ns → Formula' ns
+  _⟶_ : ∀ {ns} → Formula' ns → Formula' ns → Formula' ns
+  ∘ : ∀ {ns} v → Formula' ns → {v∉ : v ∉O ns} → Formula' (insertO v ns)
+  -- [_/_] : ∀ {y ns} → Term → (x : ℕ) → {x∈ : x ∈ ns} → {y⊆ : y ⊆ ns} → {x≠y : [ x ] ≢ y} → Formula ns → Formula (remove x ns)
+  -- [_//_] : ∀ {y ns} → Term y → (x : ℕ) → {x⊆ : x ∈ ns} → {y⊈ : y ⊈ ns} → {x≠y : [ x ] ≢ y} → Formula ns → Formula (union y (remove x ns))
+  All : ∀ {ns} v → Formula' ns → Formula' (removeO v ns)
+  Ex : ∀ {ns} v → Formula' ns → Formula' (removeO v ns)
+
+
+
+
+-- insert-reomve-id : ∀ {x n m} -> n ≡ m -> n ≡ insertO x (removeO x m)
+-- insert-reomve-id {x} {xs} refl = {! xs  !}
+
+
+rem-inj : ∀ {n m} x -> n ≡ m -> remove x n ≡ remove x m
+rem-inj _ refl = refl
+
+data _⊢⟨_⟩_ : ∀ {n m} → Structure n → n ≡ m -> Structure m → Set where
+  atom : ∀ {n xs n≡m} {ts us : TTermList xs} →
+    ∣ n ⟨ ts ⟩ ∣ ⊢⟨ n≡m ⟩ ∣ n ⟨ us ⟩ ∣
+  allR : ∀ {x n m n≡m X} {Y : Structure m} →
+    Y ⊢⟨ n≡m ⟩ Q {n} x ∣ X ∣ →
+    -------------------
+    Y ⊢⟨ n≡m ⟩ ∣ All {n} x X ∣
+  allL : ∀ {x n m n≡m X} {Y : Formula m} →
+            ∣ X ∣ ⊢⟨ n≡m ⟩ ∣ Y ∣ →
+    -------------------------------
+    ∣ All {n} x X ∣ ⊢⟨ rem-inj x n≡m ⟩ Q {m} x ∣ Y ∣
+  IL : ∀ {n m n≡m} {X : Structure n} {Y : Structure m} →
+       X ⊢⟨ n≡m ⟩ Y →
+    -------------------
+    (I , X) {refl} ⊢⟨ n≡m ⟩ Y
+  IL2 : ∀ {n m n≡m} {X : Structure n} {Y : Structure m} →
+    (I , X) {refl} ⊢⟨ n≡m ⟩ Y →
+    -------------------
+       X ⊢⟨ n≡m ⟩ Y
+  IR : ∀ {n m n≡m} {X : Structure n} {Y : Structure m} →
+      X ⊢⟨ n≡m ⟩ Y →
+   -----------------
+   X ⊢⟨ n≡m ⟩ (Y , I) {refl}
+  IR2 : ∀ {n m n≡m} {X : Structure n} {Y : Structure m} →
+    X ⊢⟨ n≡m ⟩ (Y , I) {refl} →
+    -----------------
+    X ⊢⟨ n≡m ⟩ Y
+
+  ,>>disp : ∀ {n m n≡m} {Z : Structure n} {X Y : Structure m} →
+    Z ⊢⟨ n≡m ⟩ (X , Y) {refl} →
+    -----------------
+    (X >> Z) {sym n≡m} ⊢⟨ refl ⟩ Y
+  ,>>disp2 : ∀ {n m n≡m} {Z : Structure n} {X Y : Structure m} →
+    (X >> Z) {sym n≡m} ⊢⟨ refl ⟩ Y →
+    -----------------
+    Z ⊢⟨ n≡m ⟩ (X , Y) {refl}
+  ○IR : ∀ {x n m n≡m x∉m} {X : Structure n} →
+    X ⊢⟨ n≡m ⟩ (I {insert x m}) →
+    -----------------
+    X ⊢⟨ n≡m ⟩ ○ x (I {m}) {x∉m}
+  ○IR2 : ∀ {x n m n≡m x∉m} {X : Structure n} →
+    X ⊢⟨ n≡m ⟩ ○ x (I {m}) {x∉m}  →
+    -----------------
+    X ⊢⟨ n≡m ⟩ (I {insert x m})
+  -- ,<<disp : ∀ {n m n≡m} {X : Structure n} {Y Z : Structure m} →
+  --   X ⊢⟨ n≡m ⟩ (Y , Z) {refl} →
+  --   -----------------
+  --   (X >> Z) {n≡m} ⊢⟨ n≡m ⟩ Y
+  -- ,<<disp2 : ∀ {n m n≡m} {X : Structure n} {Y Z : Structure m} →
+  --   (X >> Z) {n≡m} ⊢⟨ n≡m ⟩ Y →
+  --   -----------------
+  --   X ⊢⟨ n≡m ⟩ (Y , Z) {refl}
+rem-union-id : ∀ x -> remove x (union [ x ] []) ≡ []
+rem-union-id x rewrite remove-rewrite x {[]} = refl
+
+
+
+
+test : ∀ x y {n} -> ∣ All x (n ⟨ (TVar x) ∷T []T ⟩) ∣ ⊢⟨ PropEq.trans (rem-union-id x) (sym (rem-union-id y)) ⟩ ∣ All y (n ⟨ (TVar y) ∷T []T ⟩) ∣
+test x y = allR ?
 
 
 data Map : List ℕ → Set where
@@ -399,12 +726,12 @@ Term→Str m ([[[_]]]_ _ _) = ""
 
 
 Formula→Str : ∀ {xs} → List (ℕ × String) → Formula xs → String
-Formula→Str m (n ⟨ args ⟩) = n ++ "(" ++ aux args ++ ")"
-  where
-  aux : List Term → String
-  aux [] = ""
-  aux (x ∷ []) = Term→Str m x
-  aux (x ∷ (y ∷ args)) = Term→Str m x ++ ", " ++ aux (y ∷ args)
+Formula→Str m (n ⟨ args ⟩) = n ++ "(" ++ ")" --aux args ++ ")"
+  -- where
+  -- aux : List Term → String
+  -- aux [] = ""
+  -- aux (x ∷ []) = Term→Str m x
+  -- aux (x ∷ (y ∷ args)) = Term→Str m x ++ ", " ++ aux (y ∷ args)
 Formula→Str m (f ∧ f₁) = Formula→Str m f ++ " \\land " ++ Formula→Str m f₁
 Formula→Str m (f ∨ f₁) = Formula→Str m f ++ " \\lor " ++ Formula→Str m f₁
 Formula→Str m (f ⟶ f₁) = Formula→Str m f ++ " \\leftarrow " ++ Formula→Str m f₁
@@ -418,6 +745,8 @@ Structure→Str : ∀ {xs} → List (ℕ × String) → Structure xs → String
 Structure→Str m ∣ x ∣ = Formula→Str m x
 Structure→Str m (s , s₁) = Structure→Str m s ++ " , " ++ Structure→Str m s₁
 Structure→Str m (s >> s₁) = Structure→Str m s ++ " >> " ++ Structure→Str m s₁
+Structure→Str m (s << s₁) = Structure→Str m s ++ " << " ++ Structure→Str m s₁
+Structure→Str m I = "I"
 Structure→Str m (○ v s) = "\\bigcirc_" ++ (m !! v) ++ Structure→Str m s
 Structure→Str m (Q v s) = "Q " ++ (m !! v) ++ Structure→Str m s
 
@@ -430,7 +759,7 @@ data ⊢List : Set where
   _⊢::_ : ∀ {n} {xs ys : Structure n} → xs ⊢ ys → ⊢List → ⊢List
 
 ⊢prems : ∀ {n} {xs ys : Structure n} → xs ⊢ ys → ⊢List
--- ⊢prems atom = ⊢nil
+⊢prems atom = ⊢nil
 ⊢prems (allR xs⊢ys) = xs⊢ys ⊢:: ⊢nil
 ⊢prems (allL xs⊢ys) = xs⊢ys ⊢:: ⊢nil
 
